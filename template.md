@@ -10,8 +10,7 @@
 
 [(manifest)](https://oci.dag.dev/?image={{ .Sigs.Digest }})
 
-{{ range .Sigs.Data -}}
-
+{{ range .Sigs.Data }}
 --|--
 {{ if .Bundle -}}
 Date | {{ unix .Bundle.Payload.IntegratedTime }}

@@ -31,7 +31,7 @@ const (
 <link rel="stylesheet" href="https://cdn.simplecss.org/simple.min.css">
 </head>
 <body>
-<h1>oci.fyi</h1>
+<h1 id="oci-fyi"><a href="/">oci.fyi</a></h1>
 <form action="/" method="GET" autocomplete="off" spellcheck="false">
 <input size="100" type="text" name="image" value="cgr.dev/chainguard/static">
 <input type="submit">
