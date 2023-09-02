@@ -6,6 +6,7 @@ require (
 	github.com/gomarkdown/markdown v0.0.0-20230716120725-531d2d74bc12
 	github.com/google/go-containerregistry v0.16.1
 	github.com/in-toto/in-toto-golang v0.9.0
+	github.com/secure-systems-lab/go-securesystemslib v0.7.0
 	github.com/sigstore/cosign/v2 v2.2.0
 	github.com/sigstore/fulcio v1.4.0
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
@@ -39,7 +40,6 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0-rc4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/secure-systems-lab/go-securesystemslib v0.7.0 // indirect
 	github.com/shibumi/go-pathspec v1.3.0 // indirect
 	github.com/sigstore/rekor v1.2.2 // indirect
 	github.com/sigstore/sigstore v1.7.2 // indirect

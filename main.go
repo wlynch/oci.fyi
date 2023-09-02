@@ -12,6 +12,7 @@ import (
 	"html/template"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -62,7 +63,9 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		fmt.Println(b)
+		if os.Getenv("DEBUG") != "" {
+			fmt.Println(b)
+		}
 
 		// Render to HTML
 		p := parser.NewWithExtensions(parser.CommonExtensions | parser.AutoHeadingIDs | parser.NoEmptyLineBeforeBlock | parser.Tables)
@@ -208,7 +211,6 @@ func getData(ref name.Reference) (name.Digest, []*SignatureData, error) {
 		layerDigest := ref.Context().Digest(l.Digest.String())
 		s.Layer = layerDigest
 
-		fmt.Println(l.MediaType)
 		if l.MediaType == "application/vnd.dsse.envelope.v1+json" {
 			intoto, err := readDSSEHeader(layerDigest)
 			if err != nil {
