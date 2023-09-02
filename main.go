@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/json"
@@ -8,37 +9,98 @@ import (
 	"fmt"
 	"html/template"
 	"io"
-	"log"
-	"os"
+	"net/http"
 	"strings"
 	"time"
 
+	"github.com/gomarkdown/markdown"
+	"github.com/gomarkdown/markdown/html"
+	"github.com/gomarkdown/markdown/parser"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/sigstore/cosign/v2/pkg/cosign/bundle"
 	ociremote "github.com/sigstore/cosign/v2/pkg/oci/remote"
 	"github.com/sigstore/fulcio/pkg/certificate"
+	"golang.org/x/exp/slog"
+)
+
+const (
+	defaultPage = `<html>
+<head>
+<link rel="stylesheet" href="https://cdn.simplecss.org/simple.min.css">
+</head>
+<body>
+<h1>oci.fyi</h1>
+<form action="/" method="GET" autocomplete="off" spellcheck="false">
+<input size="100" type="text" name="image" value="cgr.dev/chainguard/static">
+<input type="submit">
+</form>
+</body>
+</html>`
 )
 
 func main() {
-	ref, err := name.ParseReference("cgr.dev/chainguard/go:latest")
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		image := r.URL.Query().Get("image")
+		if image == "" {
+			w.Write([]byte(defaultPage))
+			return
+		}
+		// Render markdown, then pass to html/template.
+		// This was just easier to prototype than trying to deal with html/css.
+		ref, err := name.ParseReference(image)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		b := new(bytes.Buffer)
+		if err := handleRef(b, ref); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Render to HTML
+		p := parser.NewWithExtensions(parser.CommonExtensions | parser.AutoHeadingIDs | parser.NoEmptyLineBeforeBlock | parser.Tables)
+		doc := p.Parse(b.Bytes())
+		opts := html.RendererOptions{
+			Title: "asdf",
+			Flags: html.CommonFlags | html.HrefTargetBlank | html.CompletePage,
+			CSS:   "https://cdn.simplecss.org/simple.min.css",
+		}
+		renderer := html.NewRenderer(opts)
+
+		w.Write(markdown.Render(doc, renderer))
+	})
+	http.ListenAndServe(":8080", nil)
+}
+
+func handleRef(w io.Writer, ref name.Reference) error {
+	desc, err := remote.Head(ref)
 	if err != nil {
-		log.Fatalf("error parsing reference: %v", err)
+		return fmt.Errorf("error getting remote image: %w", err)
 	}
 
-	sigRef, err := ociremote.SignatureTag(ref)
+	sig, err := getSignature(ref)
 	if err != nil {
-		log.Fatalf("error getting signature tag: %v", err)
+		slog.Warn("%v", err)
 	}
 
-	sig, err := getSignature(sigRef)
+	att, err := getAttestations(ref)
 	if err != nil {
-		log.Fatalf("error getting signature: %v", err)
+		slog.Warn("%v", err)
 	}
 
-	if err := render(os.Stdout, ref, sig); err != nil {
-		log.Fatal(err)
-	}
+	return tmpl.ExecuteTemplate(w, "template.md", struct {
+		Ref         name.Reference
+		ResolvedRef name.Reference
+		Sigs        []*SignatureData
+		Att         []*SignatureData
+	}{
+		Ref:         ref,
+		ResolvedRef: ref.Context().Digest(desc.Digest.String()),
+		Sigs:        sig,
+		Att:         att,
+	})
 }
 
 var (
@@ -53,26 +115,24 @@ var (
 	)
 )
 
-func render(w io.Writer, ref name.Reference, sigs []*SignatureData) error {
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	enc.Encode(sigs)
-	return tmpl.ExecuteTemplate(w, "template.md", struct {
-		Ref  name.Reference
-		Sigs []*SignatureData
-	}{
-		Ref:  ref,
-		Sigs: sigs,
-	})
-}
-
 type SignatureData struct {
-	Bundle     *bundle.RekorBundle
-	Cert       *x509.Certificate
-	Extensions certificate.Extensions
+	Bundle        *bundle.RekorBundle
+	Cert          *x509.Certificate
+	Extensions    certificate.Extensions
+	Predicate     name.Reference
+	PredicateType string
 }
 
 func getSignature(ref name.Reference) ([]*SignatureData, error) {
+	sigRef, err := ociremote.SignatureTag(ref)
+	if err != nil {
+		return nil, fmt.Errorf("error getting signature tag: %v", err)
+	}
+
+	return getData(sigRef)
+}
+
+func getData(ref name.Reference) ([]*SignatureData, error) {
 	img, err := remote.Image(ref)
 	if err != nil {
 		return nil, fmt.Errorf("error getting remote image: %w", err)
@@ -100,14 +160,17 @@ func getSignature(ref name.Reference) ([]*SignatureData, error) {
 				if err != nil {
 					return nil, fmt.Errorf("error parsing cert: %w", err)
 				}
-				s.Cert = cert
+				//s.Cert = cert
 				ext, err := parseExtensions(cert.Extensions)
 				if err != nil {
 					return nil, fmt.Errorf("error parsing extensions: %w", err)
 				}
 				s.Extensions = ext
+			case "predicateType":
+				s.PredicateType = v
 			}
 		}
+		s.Predicate = ref.Context().Digest(l.Digest.String())
 		out = append(out, s)
 	}
 	return out, nil
@@ -209,10 +272,19 @@ func shaURL(repo, sha string) string {
 
 func buildConfigURL(ext certificate.Extensions) string {
 	if strings.HasPrefix(ext.BuildConfigURI, "https://github.com") {
-		path := strings.TrimPrefix(ext.BuildConfigURI, ext.SourceRepositoryOwnerURI)
+		path := strings.TrimPrefix(ext.BuildConfigURI, ext.SourceRepositoryURI)
 		path, _, _ = strings.Cut(path, "@")
 		path = strings.Trim(path, "/")
 		return fmt.Sprintf("%s/blob/%s/%s", ext.SourceRepositoryURI, ext.BuildConfigDigest, path)
 	}
 	return ext.BuildConfigURI
+}
+
+func getAttestations(ref name.Reference) ([]*SignatureData, error) {
+	attRef, err := ociremote.AttestationTag(ref)
+	if err != nil {
+		return nil, fmt.Errorf("error getting signature tag: %v", err)
+	}
+
+	return getData(attRef)
 }

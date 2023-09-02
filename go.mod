@@ -1,12 +1,14 @@
-module github.com/wlynch/supplychain-wtf
+module github.com/wlynch/oci-fyi
 
 go 1.21.0
 
 require (
+	github.com/gomarkdown/markdown v0.0.0-20230716120725-531d2d74bc12
 	github.com/google/go-containerregistry v0.16.1
 	github.com/sigstore/cosign/v2 v2.2.0
 	github.com/sigstore/fulcio v1.4.0
 	github.com/smallstep/certinfo v1.12.0
+	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 )
 
 require (
