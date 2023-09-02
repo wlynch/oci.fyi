@@ -8,7 +8,9 @@
 
 ## [Signatures](#signatures)
 
-{{ range .Sigs -}}
+[(manifest)](https://oci.dag.dev/?image={{ .Sigs.Digest }})
+
+{{ range .Sigs.Data -}}
 
 --|--
 {{ if .Bundle -}}
@@ -18,36 +20,39 @@ LogIndex | [{{ .Bundle.Payload.LogIndex }}](https://search.sigstore.dev/?logInde
 Identity | {{ with subjectAltName .Cert }}`{{ . }}`{{ end }}
 {{ with .Extensions -}}
 Issuer | {{ with .Issuer }}<img src="{{ issuerIcon . }}" width="20"/> `{{ . }}`{{ end }}
-{{ if .SourceRepositoryURI -}}
+{{- if .SourceRepositoryURI -}}
 Repo | [{{ .SourceRepositoryURI }}]({{ .SourceRepositoryURI }})
 SHA | [{{ slice .SourceRepositoryDigest 32 }}]({{ shaURL .SourceRepositoryURI .SourceRepositoryDigest }})
 Ref | {{ .SourceRepositoryRef }}
 Build | {{ .RunInvocationURI }}
 Build Config | [{{ .BuildConfigURI }} ({{ slice .BuildConfigDigest 32 }})]({{ buildConfigURL . }})
-{{ end -}}
+{{- end -}}
+{{- end }}
+Type | {{ .PredicateType }}
+Payload | [(layer)](https://oci.dag.dev/?blob={{ .Predicate }})
 {{ end }}
-{{ end -}}
 
 ## [Attestations](#attestations)
 
-{{ range .Att -}}
+[(manifest)](https://oci.dag.dev/?image={{ .Att.Digest }})
 
+{{ range .Att.Data }}
 --|--
 {{ if .Bundle -}}
 Date | {{ unix .Bundle.Payload.IntegratedTime }}
 LogIndex | [{{ .Bundle.Payload.LogIndex }}](https://search.sigstore.dev/?logIndex={{ .Bundle.Payload.LogIndex }})
 {{ end -}}
-PredicateType | {{ .PredicateType }}
-Predicate | [{{ .Predicate }}](https://oci.dag.dev/?blob={{ .Predicate }})
 Identity | {{ with subjectAltName .Cert }}`{{ . }}`{{end}}
 {{ with .Extensions -}}
 Issuer | {{ with .Issuer }}<img src="{{ issuerIcon . }}" width="20"/> `{{ . }}`{{ end }}
-{{ if .SourceRepositoryURI -}}
+{{- if .SourceRepositoryURI -}}
 Repo | [{{ .SourceRepositoryURI }}]({{ .SourceRepositoryURI }})
 SHA | [{{ slice .SourceRepositoryDigest 32 }}]({{ shaURL .SourceRepositoryURI .SourceRepositoryDigest }})
 Ref | {{ .SourceRepositoryRef }}
 Build | {{ .RunInvocationURI }}
 Build Config | [{{ .BuildConfigURI }} ({{ slice .BuildConfigDigest 32 }})]({{ buildConfigURL . }})
-{{ end -}}
+{{- end -}}
+{{- end }}
+Type | {{ .PredicateType }}
+Payload | [(layer)](https://oci.dag.dev/?blob={{ .Predicate }})
 {{ end }}
-{{ end -}}

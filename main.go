@@ -60,13 +60,11 @@ func main() {
 			return
 		}
 
-		fmt.Println(b.String())
-
 		// Render to HTML
 		p := parser.NewWithExtensions(parser.CommonExtensions | parser.AutoHeadingIDs | parser.NoEmptyLineBeforeBlock | parser.Tables)
 		doc := p.Parse(b.Bytes())
 		opts := html.RendererOptions{
-			Title: "asdf",
+			Title: r.Host,
 			Flags: html.CommonFlags | html.HrefTargetBlank | html.CompletePage,
 			CSS:   "https://cdn.simplecss.org/simple.min.css",
 		}
@@ -83,27 +81,34 @@ func handleRef(w io.Writer, ref name.Reference) error {
 		return fmt.Errorf("error getting remote image: %w", err)
 	}
 
-	sig, err := getSignature(ref)
+	sigDigest, sigData, err := getSignature(ref)
 	if err != nil {
 		slog.Warn("%v", err)
 	}
 
-	att, err := getAttestations(ref)
+	attDigest, attData, err := getAttestations(ref)
 	if err != nil {
 		slog.Warn("%v", err)
 	}
 
-	return tmpl.ExecuteTemplate(w, "template.md", struct {
-		Ref         name.Reference
-		ResolvedRef name.Reference
-		Sigs        []*SignatureData
-		Att         []*SignatureData
-	}{
+	return tmpl.ExecuteTemplate(w, "template.md", &output{
 		Ref:         ref,
 		ResolvedRef: ref.Context().Digest(desc.Digest.String()),
-		Sigs:        sig,
-		Att:         att,
+		Sigs:        &manifest{Digest: sigDigest.String(), Data: sigData},
+		Att:         &manifest{Digest: attDigest.String(), Data: attData},
 	})
+}
+
+type output struct {
+	Ref         name.Reference
+	ResolvedRef name.Reference
+	Sigs        *manifest
+	Att         *manifest
+}
+
+type manifest struct {
+	Digest string
+	Data   []*SignatureData
 }
 
 var (
@@ -128,25 +133,31 @@ type SignatureData struct {
 	Extensions    certificate.Extensions
 	Predicate     name.Reference
 	PredicateType string
+	Layer         string
 }
 
-func getSignature(ref name.Reference) ([]*SignatureData, error) {
+func getSignature(ref name.Reference) (name.Digest, []*SignatureData, error) {
 	sigRef, err := ociremote.SignatureTag(ref)
 	if err != nil {
-		return nil, fmt.Errorf("error getting signature tag: %v", err)
+		return name.Digest{}, nil, fmt.Errorf("error getting signature tag: %v", err)
 	}
 
 	return getData(sigRef)
 }
 
-func getData(ref name.Reference) ([]*SignatureData, error) {
+func getData(ref name.Reference) (name.Digest, []*SignatureData, error) {
 	img, err := remote.Image(ref)
 	if err != nil {
-		return nil, fmt.Errorf("error getting remote image: %w", err)
+		return name.Digest{}, nil, fmt.Errorf("error getting remote image: %w", err)
 	}
+	d, err := img.Digest()
+	if err != nil {
+		return name.Digest{}, nil, fmt.Errorf("error getting digest: %v", err)
+	}
+	digest := ref.Context().Digest(d.String())
 	manifest, err := img.Manifest()
 	if err != nil {
-		return nil, fmt.Errorf("error getting manifest: %w", err)
+		return digest, nil, fmt.Errorf("error getting manifest: %w", err)
 	}
 
 	var out []*SignatureData
@@ -157,7 +168,7 @@ func getData(ref name.Reference) ([]*SignatureData, error) {
 			case "dev.sigstore.cosign/bundle":
 				bundle := new(bundle.RekorBundle)
 				if err := json.Unmarshal([]byte(v), bundle); err != nil {
-					return nil, fmt.Errorf("error unmarshalling bundle: %w", err)
+					return digest, nil, fmt.Errorf("error unmarshalling bundle: %w", err)
 				}
 				s.Bundle = bundle
 
@@ -165,12 +176,12 @@ func getData(ref name.Reference) ([]*SignatureData, error) {
 				data, _ := pem.Decode([]byte(v))
 				cert, err := x509.ParseCertificate(data.Bytes)
 				if err != nil {
-					return nil, fmt.Errorf("error parsing cert: %w", err)
+					return digest, nil, fmt.Errorf("error parsing cert: %w", err)
 				}
 				s.Cert = cert
 				ext, err := parseExtensions(cert.Extensions)
 				if err != nil {
-					return nil, fmt.Errorf("error parsing extensions: %w", err)
+					return digest, nil, fmt.Errorf("error parsing extensions: %w", err)
 				}
 
 				s.Extensions = ext
@@ -178,10 +189,11 @@ func getData(ref name.Reference) ([]*SignatureData, error) {
 				s.PredicateType = v
 			}
 		}
+		s.PredicateType = string(l.MediaType)
 		s.Predicate = ref.Context().Digest(l.Digest.String())
 		out = append(out, s)
 	}
-	return out, nil
+	return digest, out, nil
 }
 
 func parseExtensions(ext []pkix.Extension) (certificate.Extensions, error) {
@@ -288,10 +300,10 @@ func buildConfigURL(ext certificate.Extensions) string {
 	return ext.BuildConfigURI
 }
 
-func getAttestations(ref name.Reference) ([]*SignatureData, error) {
+func getAttestations(ref name.Reference) (name.Digest, []*SignatureData, error) {
 	attRef, err := ociremote.AttestationTag(ref)
 	if err != nil {
-		return nil, fmt.Errorf("error getting signature tag: %v", err)
+		return name.Digest{}, nil, fmt.Errorf("error getting signature tag: %v", err)
 	}
 
 	return getData(attRef)
