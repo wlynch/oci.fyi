@@ -86,6 +86,10 @@ func issuerIcon(issuer string) string {
 	switch issuer {
 	case "https://token.actions.githubusercontent.com":
 		return "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+	case "https://gitlab.com":
+		return "https://about.gitlab.com/images/press/press-kit-icon.svg"
+	case "https://accounts.google.com":
+		return "https://lh3.googleusercontent.com/COxitqgJr1sJnIDe8-jiKhxDx1FrYbtRHKJ9z_hELisAlapwE9LUPh6fcXIfb5vwpbMl4xl9H9TRFPc5NOO8Sb3VSgIBrfRYvW6cUA"
 	}
 	return ""
 }
