@@ -98,8 +98,9 @@ func getData(ref name.Reference) (name.Digest, []*SignatureData, error) {
 		layerDigest := ref.Context().Digest(l.Digest.String())
 		s.Layer = layerDigest
 
+		// If it's a DSSE envelope, we might be able to extract more useful info from the predicate.
 		if l.MediaType == "application/vnd.dsse.envelope.v1+json" {
-			intoto, err := readDSSEHeader(layerDigest)
+			intoto, err := readIntotoHeader(layerDigest)
 			if err != nil {
 				return digest, nil, fmt.Errorf("error reading intoto header: %w", err)
 			}
@@ -113,7 +114,7 @@ func getData(ref name.Reference) (name.Digest, []*SignatureData, error) {
 	return digest, out, nil
 }
 
-func readDSSEHeader(digest name.Digest) (*in_toto.StatementHeader, error) {
+func readIntotoHeader(digest name.Digest) (*in_toto.StatementHeader, error) {
 	blob, err := remote.Layer(digest)
 	if err != nil {
 		return nil, fmt.Errorf("error getting layer: %w", err)
@@ -139,6 +140,7 @@ func readDSSEHeader(digest name.Digest) (*in_toto.StatementHeader, error) {
 	return out, nil
 }
 
+// forked from fulcio since it's not exported.
 func parseExtensions(ext []pkix.Extension) (certificate.Extensions, error) {
 	out := certificate.Extensions{}
 
