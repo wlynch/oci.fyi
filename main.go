@@ -41,6 +41,7 @@ const (
 
 func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		slog.Info("url", r.URL)
 		image := r.URL.Query().Get("image")
 		if image == "" {
 			w.Write([]byte(defaultPage))
@@ -110,6 +111,7 @@ var (
 				"unix":           func(t int64) time.Time { return time.Unix(t, 0) },
 				"shaURL":         shaURL,
 				"buildConfigURL": buildConfigURL,
+				"issuerIcon":     issuerIcon,
 			}).
 			ParseFiles("template.md"),
 	)
@@ -287,4 +289,12 @@ func getAttestations(ref name.Reference) ([]*SignatureData, error) {
 	}
 
 	return getData(attRef)
+}
+
+func issuerIcon(issuer string) string {
+	switch issuer {
+	case "https://token.actions.githubusercontent.com":
+		return "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
+	}
+	return ""
 }

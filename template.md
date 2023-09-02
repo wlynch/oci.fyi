@@ -16,6 +16,7 @@ Date | {{ unix .Bundle.Payload.IntegratedTime }}
 LogIndex | [{{ .Bundle.Payload.LogIndex }}](https://search.sigstore.dev/?logIndex={{ .Bundle.Payload.LogIndex }})
 {{ end -}}
 {{ with .Extensions -}}
+Issuer | <img src="{{ issuerIcon .Issuer }}" width="20"/> `{{ .Issuer }}`
 {{ if .SourceRepositoryURI -}}
 Repo | [{{ .SourceRepositoryURI }}]({{ .SourceRepositoryURI }})
 SHA | [{{ slice .SourceRepositoryDigest 32 }}]({{ shaURL .SourceRepositoryURI .SourceRepositoryDigest }})
@@ -38,6 +39,7 @@ LogIndex | [{{ .Bundle.Payload.LogIndex }}](https://search.sigstore.dev/?logInde
 PredicateType | {{ .PredicateType }}
 Predicate | [{{ .Predicate }}](https://oci.dag.dev/?blob={{ .Predicate }})
 {{ with .Extensions -}}
+Issuer | <img src="{{ issuerIcon .Issuer }}" width="20"/> `{{ .Issuer }}`
 {{ if .SourceRepositoryURI -}}
 Repo | [{{ .SourceRepositoryURI }}]({{ .SourceRepositoryURI }})
 SHA | [{{ slice .SourceRepositoryDigest 32 }}]({{ shaURL .SourceRepositoryURI .SourceRepositoryDigest }})
