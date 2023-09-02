@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -19,6 +20,8 @@ import (
 	"github.com/gomarkdown/markdown/parser"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/in-toto/in-toto-golang/in_toto"
+	"github.com/secure-systems-lab/go-securesystemslib/dsse"
 	"github.com/sigstore/cosign/v2/pkg/cosign/bundle"
 	ociremote "github.com/sigstore/cosign/v2/pkg/oci/remote"
 	"github.com/sigstore/fulcio/pkg/certificate"
@@ -59,6 +62,7 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		fmt.Println(b)
 
 		// Render to HTML
 		p := parser.NewWithExtensions(parser.CommonExtensions | parser.AutoHeadingIDs | parser.NoEmptyLineBeforeBlock | parser.Tables)
@@ -94,19 +98,29 @@ func handleRef(w io.Writer, ref name.Reference) error {
 	return tmpl.ExecuteTemplate(w, "template.md", &output{
 		Ref:         ref,
 		ResolvedRef: ref.Context().Digest(desc.Digest.String()),
-		Sigs:        &manifest{Digest: sigDigest.String(), Data: sigData},
-		Att:         &manifest{Digest: attDigest.String(), Data: attData},
+		Data: []*manifest{
+			{
+				Name:   "Signatures",
+				Digest: sigDigest.String(),
+				Data:   sigData,
+			},
+			{
+				Name:   "Attestations",
+				Digest: attDigest.String(),
+				Data:   attData,
+			},
+		},
 	})
 }
 
 type output struct {
 	Ref         name.Reference
 	ResolvedRef name.Reference
-	Sigs        *manifest
-	Att         *manifest
+	Data        []*manifest
 }
 
 type manifest struct {
+	Name   string
 	Digest string
 	Data   []*SignatureData
 }
@@ -122,6 +136,7 @@ var (
 				"buildConfigURL": buildConfigURL,
 				"issuerIcon":     issuerIcon,
 				"subjectAltName": subjectAltName,
+				"lower":          strings.ToLower,
 			}).
 			ParseFS(fs, "template.md"),
 	)
@@ -131,9 +146,9 @@ type SignatureData struct {
 	Bundle        *bundle.RekorBundle
 	Cert          *x509.Certificate
 	Extensions    certificate.Extensions
-	Predicate     name.Reference
+	Layer         name.Reference
+	LayerType     string
 	PredicateType string
-	Layer         string
 }
 
 func getSignature(ref name.Reference) (name.Digest, []*SignatureData, error) {
@@ -186,14 +201,53 @@ func getData(ref name.Reference) (name.Digest, []*SignatureData, error) {
 
 				s.Extensions = ext
 			case "predicateType":
-				s.PredicateType = v
+				s.LayerType = v
 			}
 		}
-		s.PredicateType = string(l.MediaType)
-		s.Predicate = ref.Context().Digest(l.Digest.String())
+		s.LayerType = string(l.MediaType)
+		layerDigest := ref.Context().Digest(l.Digest.String())
+		s.Layer = layerDigest
+
+		fmt.Println(l.MediaType)
+		if l.MediaType == "application/vnd.dsse.envelope.v1+json" {
+			intoto, err := readDSSEHeader(layerDigest)
+			if err != nil {
+				return digest, nil, fmt.Errorf("error reading intoto header: %w", err)
+			}
+			if intoto != nil {
+				s.PredicateType = intoto.PredicateType
+			}
+		}
+
 		out = append(out, s)
 	}
 	return digest, out, nil
+}
+
+func readDSSEHeader(digest name.Digest) (*in_toto.StatementHeader, error) {
+	blob, err := remote.Layer(digest)
+	if err != nil {
+		return nil, fmt.Errorf("error getting layer: %w", err)
+	}
+	r, err := blob.Uncompressed()
+	if err != nil {
+		return nil, fmt.Errorf("error getting layer content: %w", err)
+	}
+	defer r.Close()
+
+	env := new(dsse.Envelope)
+	if err := json.NewDecoder(r).Decode(env); err != nil {
+		return nil, fmt.Errorf("error decoding dsse envelope: %w", err)
+	}
+	if env.PayloadType != "application/vnd.in-toto+json" {
+		return nil, nil
+	}
+
+	out := new(in_toto.StatementHeader)
+	if err := json.NewDecoder(base64.NewDecoder(base64.StdEncoding, bytes.NewBufferString(env.Payload))).Decode(out); err != nil {
+		return nil, fmt.Errorf("error decoding intoto statement: %w", err)
+	}
+	return out, nil
 }
 
 func parseExtensions(ext []pkix.Extension) (certificate.Extensions, error) {
