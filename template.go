@@ -64,11 +64,17 @@ func shaURL(repo, sha string) string {
 }
 
 func buildConfigURL(ext certificate.Extensions) string {
-	if strings.HasPrefix(ext.BuildConfigURI, "https://github.com") {
+	switch {
+	case strings.HasPrefix(ext.BuildConfigURI, "https://github.com"):
 		path := strings.TrimPrefix(ext.BuildConfigURI, ext.SourceRepositoryURI)
 		path, _, _ = strings.Cut(path, "@")
 		path = strings.Trim(path, "/")
 		return fmt.Sprintf("%s/blob/%s/%s", ext.SourceRepositoryURI, ext.BuildConfigDigest, path)
+	case strings.HasPrefix(ext.BuildConfigURI, "https://gitlab.com"):
+		path := strings.TrimPrefix(ext.BuildConfigURI, ext.SourceRepositoryURI)
+		path, _, _ = strings.Cut(path, "@")
+		path = strings.Trim(path, "/")
+		return fmt.Sprintf("%s/-/blob/%s/%s", ext.SourceRepositoryURI, ext.BuildConfigDigest, path)
 	}
 	return ext.BuildConfigURI
 }
