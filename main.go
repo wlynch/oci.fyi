@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"embed"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -41,7 +42,6 @@ const (
 
 func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		slog.Info("url", r.URL)
 		image := r.URL.Query().Get("image")
 		if image == "" {
 			w.Write([]byte(defaultPage))
@@ -59,6 +59,8 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
+		fmt.Println(b.String())
 
 		// Render to HTML
 		p := parser.NewWithExtensions(parser.CommonExtensions | parser.AutoHeadingIDs | parser.NoEmptyLineBeforeBlock | parser.Tables)
@@ -105,6 +107,8 @@ func handleRef(w io.Writer, ref name.Reference) error {
 }
 
 var (
+	//go:embed "template.md"
+	fs   embed.FS
 	tmpl = template.Must(
 		template.New("").
 			Funcs(template.FuncMap{
@@ -112,8 +116,9 @@ var (
 				"shaURL":         shaURL,
 				"buildConfigURL": buildConfigURL,
 				"issuerIcon":     issuerIcon,
+				"subjectAltName": subjectAltName,
 			}).
-			ParseFiles("template.md"),
+			ParseFS(fs, "template.md"),
 	)
 )
 
@@ -162,11 +167,12 @@ func getData(ref name.Reference) ([]*SignatureData, error) {
 				if err != nil {
 					return nil, fmt.Errorf("error parsing cert: %w", err)
 				}
-				//s.Cert = cert
+				s.Cert = cert
 				ext, err := parseExtensions(cert.Extensions)
 				if err != nil {
 					return nil, fmt.Errorf("error parsing extensions: %w", err)
 				}
+
 				s.Extensions = ext
 			case "predicateType":
 				s.PredicateType = v
@@ -297,4 +303,15 @@ func issuerIcon(issuer string) string {
 		return "https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png"
 	}
 	return ""
+}
+
+func subjectAltName(cert *x509.Certificate) string {
+	if cert == nil {
+		return ""
+	}
+	url := make([]string, 0, len(cert.URIs))
+	for _, u := range cert.URIs {
+		url = append(url, u.String())
+	}
+	return strings.Join(append(cert.EmailAddresses, url...), " ")
 }

@@ -15,8 +15,9 @@
 Date | {{ unix .Bundle.Payload.IntegratedTime }}
 LogIndex | [{{ .Bundle.Payload.LogIndex }}](https://search.sigstore.dev/?logIndex={{ .Bundle.Payload.LogIndex }})
 {{ end -}}
+Identity | {{ with subjectAltName .Cert }}`{{ . }}`{{ end }}
 {{ with .Extensions -}}
-Issuer | <img src="{{ issuerIcon .Issuer }}" width="20"/> `{{ .Issuer }}`
+Issuer | {{ with .Issuer }}<img src="{{ issuerIcon . }}" width="20"/> `{{ . }}`{{ end }}
 {{ if .SourceRepositoryURI -}}
 Repo | [{{ .SourceRepositoryURI }}]({{ .SourceRepositoryURI }})
 SHA | [{{ slice .SourceRepositoryDigest 32 }}]({{ shaURL .SourceRepositoryURI .SourceRepositoryDigest }})
@@ -38,8 +39,9 @@ LogIndex | [{{ .Bundle.Payload.LogIndex }}](https://search.sigstore.dev/?logInde
 {{ end -}}
 PredicateType | {{ .PredicateType }}
 Predicate | [{{ .Predicate }}](https://oci.dag.dev/?blob={{ .Predicate }})
+Identity | {{ with subjectAltName .Cert }}`{{ . }}`{{end}}
 {{ with .Extensions -}}
-Issuer | <img src="{{ issuerIcon .Issuer }}" width="20"/> `{{ .Issuer }}`
+Issuer | {{ with .Issuer }}<img src="{{ issuerIcon . }}" width="20"/> `{{ . }}`{{ end }}
 {{ if .SourceRepositoryURI -}}
 Repo | [{{ .SourceRepositoryURI }}]({{ .SourceRepositoryURI }})
 SHA | [{{ slice .SourceRepositoryDigest 32 }}]({{ shaURL .SourceRepositoryURI .SourceRepositoryDigest }})
