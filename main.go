@@ -24,6 +24,7 @@ import (
 	"github.com/gomarkdown/markdown"
 	"github.com/gomarkdown/markdown/html"
 	"github.com/gomarkdown/markdown/parser"
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"golang.org/x/exp/slog"
@@ -83,17 +84,18 @@ func main() {
 }
 
 func handleRef(w io.Writer, ref name.Reference) error {
-	desc, err := remote.Head(ref)
+	opts := []remote.Option{remote.WithAuthFromKeychain(authn.DefaultKeychain)}
+	desc, err := remote.Head(ref, opts...)
 	if err != nil {
 		return fmt.Errorf("error getting remote image: %w", err)
 	}
 
-	sigDigest, sigData, err := getSignature(ref)
+	sigDigest, sigData, err := getSignature(ref, opts...)
 	if err != nil {
 		slog.Warn("%v", err)
 	}
 
-	attDigest, attData, err := getAttestations(ref)
+	attDigest, attData, err := getAttestations(ref, opts...)
 	if err != nil {
 		slog.Warn("%v", err)
 	}

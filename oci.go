@@ -41,17 +41,17 @@ type SignatureData struct {
 	PredicateType string
 }
 
-func getSignature(ref name.Reference) (name.Digest, []*SignatureData, error) {
-	sigRef, err := ociremote.SignatureTag(ref)
+func getSignature(ref name.Reference, opts ...remote.Option) (name.Digest, []*SignatureData, error) {
+	sigRef, err := ociremote.SignatureTag(ref, ociremote.WithRemoteOptions(opts...))
 	if err != nil {
 		return name.Digest{}, nil, fmt.Errorf("error getting signature tag: %v", err)
 	}
 
-	return getData(sigRef)
+	return getData(sigRef, opts...)
 }
 
-func getData(ref name.Reference) (name.Digest, []*SignatureData, error) {
-	img, err := remote.Image(ref)
+func getData(ref name.Reference, opts ...remote.Option) (name.Digest, []*SignatureData, error) {
+	img, err := remote.Image(ref, opts...)
 	if err != nil {
 		return name.Digest{}, nil, fmt.Errorf("error getting remote image: %w", err)
 	}
@@ -114,8 +114,8 @@ func getData(ref name.Reference) (name.Digest, []*SignatureData, error) {
 	return digest, out, nil
 }
 
-func readIntotoHeader(digest name.Digest) (*in_toto.StatementHeader, error) {
-	blob, err := remote.Layer(digest)
+func readIntotoHeader(digest name.Digest, opts ...remote.Option) (*in_toto.StatementHeader, error) {
+	blob, err := remote.Layer(digest, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("error getting layer: %w", err)
 	}
